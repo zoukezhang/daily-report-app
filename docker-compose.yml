@@ -14,6 +14,8 @@ services:
       args:
         - npm_config_registry=https://registry.npmmirror.com
         - npm_config_fetch-retry-maxtimeout=600000
+        # 使用当前时间戳作为CACHE_BUST，确保每次构建都能触发缓存失效
+        - CACHE_BUST=$(date +%Y%m%d%H%M%S)
     # 端口映射：主机端口:容器端口
     ports:
       - "3007:3007"
@@ -46,8 +48,5 @@ services:
 # 定义Docker命名卷（Baota中可见的存储卷）
 volumes:
   daily_report_data:
-    # 卷驱动
-    driver: local
-    # 卷标签（Baota中显示的信息）
-    labels:
-      - "com.baota.description=日常报告应用数据存储"
+    # 设置为外部卷，这样删除容器时不会自动删除卷
+    external: true
