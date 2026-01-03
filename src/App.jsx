@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3001/api/reports';
+const API_URL = 'http://localhost:3007/api/reports';
 
 const App = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -16,15 +16,28 @@ const App = () => {
   const [output, setOutput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [history, setHistory] = useState([]);
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showPasswordError, setShowPasswordError] = useState(false);
 
-  // 初始化加载数据
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  // 密码验证函数
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.get(`${API_URL}?password=${password}`);
+      setHistory(response.data);
+      setIsAuthenticated(true);
+      setShowPasswordError(false);
+    } catch (err) {
+      console.error("密码错误:", err);
+      setShowPasswordError(true);
+    }
+  };
 
   const loadHistory = async () => {
+    if (!isAuthenticated) return;
     try {
-      const response = await axios.get(API_URL);
+      const response = await axios.get(`${API_URL}?password=${password}`);
       setHistory(response.data);
     } catch (err) {
       console.error("加载数据库失败:", err);
@@ -160,7 +173,7 @@ const App = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("确定删除这条记录吗？")) return;
     try {
-      await axios.delete(`${API_URL}/${id}`);
+      await axios.delete(`${API_URL}/${id}?password=${password}`);
       loadHistory();
     } catch (error) {
       console.error("删除失败:", error);
@@ -243,27 +256,51 @@ const App = () => {
             <h2 className="font-bold text-gray-700 italic underline">历史记录</h2>
             <span className="text-[10px] text-gray-400 italic">DATABASE</span>
           </div>
-          <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
-            {history.length === 0 ? (
-              <div className="p-8 text-center text-gray-300 italic text-sm">暂无记录</div>
-            ) : (
-              history.map((item) => (
-                <div key={item.id} className="p-4 flex justify-between items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-blue-600">{item.date}</span>
-                      <span className="text-[10px] text-gray-300">{new Date(item.createdAt).toLocaleString()}</span>
-                    </div>
-                    <div className="text-xs text-gray-400 line-clamp-1">{item.content}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => copyText(item.content)} className="text-[10px] border px-2 py-1 rounded hover:bg-gray-50">复制</button>
-                    <button onClick={() => handleDelete(item.id)} className="text-[10px] border px-2 py-1 rounded text-red-400 hover:bg-red-50">删除</button>
-                  </div>
+          {!isAuthenticated ? (
+            <div className="p-8">
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold mb-2 text-gray-600">请输入密码查看历史记录</label>
+                  <input 
+                    type="password" 
+                    className={`w-full p-3 border rounded-lg outline-none ${showPasswordError ? 'border-red-500' : 'border-gray-300'}`}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="输入密码"
+                    autoFocus
+                  />
+                  {showPasswordError && (
+                    <p className="text-xs text-red-500 mt-1">密码错误，请重新输入</p>
+                  )}
                 </div>
-              ))
-            )}
-          </div>
+                <button type="submit" className="w-full font-bold py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition">
+                  验证密码
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+              {history.length === 0 ? (
+                <div className="p-8 text-center text-gray-300 italic text-sm">暂无记录</div>
+              ) : (
+                history.map((item) => (
+                  <div key={item.id} className="p-4 flex justify-between items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-blue-600">{item.date}</span>
+                        <span className="text-[10px] text-gray-300">{new Date(item.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div className="text-xs text-gray-400 line-clamp-1">{item.content}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => copyText(item.content)} className="text-[10px] border px-2 py-1 rounded hover:bg-gray-50">复制</button>
+                      <button onClick={() => handleDelete(item.id)} className="text-[10px] border px-2 py-1 rounded text-red-400 hover:bg-red-50">删除</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,0 +1,53 @@
+# 日常报告应用的Docker Compose配置
+# 专为Baota面板优化
+
+services:
+  # 主应用服务
+  daily-report-app:
+    # 容器名称（Baota中显示的名称）
+    container_name: daily-report-app
+    # 使用当前目录的Dockerfile构建镜像
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # 构建参数优化
+      args:
+        - npm_config_registry=https://registry.npmmirror.com
+        - npm_config_fetch-retry-maxtimeout=600000
+    # 端口映射：主机端口:容器端口
+    ports:
+      - "3007:3007"
+    # 数据卷：持久化SQLite数据库文件（使用命名卷确保Baota可见）
+    volumes:
+      - daily_report_data:/app/data
+    # 环境变量设置
+    environment:
+      - NODE_ENV=production
+      - npm_config_registry=https://registry.npmmirror.com
+    # 健康检查配置（Baota监控用）
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # 重启策略：除非手动停止，否则自动重启
+    restart: unless-stopped
+    # 资源限制（根据服务器配置调整）
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# 定义Docker命名卷（Baota中可见的存储卷）
+volumes:
+  daily_report_data:
+    # 卷驱动
+    driver: local
+    # 卷标签（Baota中显示的信息）
+    labels:
+      - "com.baota.description=日常报告应用数据存储"
