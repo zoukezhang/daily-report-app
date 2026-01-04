@@ -40,7 +40,10 @@ ARG CACHE_BUST=1
 # 复制项目文件
 COPY . .
 
-# 环境变量文件已通过 COPY . . 复制
+# 复制环境变量文件用于前端构建
+COPY .env ./
+
+# 环境变量将在构建时由Vite注入到前端代码中
 
 # 构建前端应用
 RUN npm run build
@@ -76,12 +79,14 @@ COPY package*.json ./
 # 安装生产依赖（带重试机制）
 RUN npm install --only=production --legacy-peer-deps --maxsockets 1
 
-# 复制环境变量文件
-COPY .env ./
+# 环境变量将在运行时通过docker-compose的env_file配置加载
 
 # 使用CACHE_BUST参数确保每次构建都能获取最新的后端代码
 COPY server/ ./server/
 COPY --from=build /app/dist ./dist
+# 复制环境变量文件到运行阶段
+COPY .env ./
+
 
 # 创建数据目录并设置权限
 RUN mkdir -p /app/data
