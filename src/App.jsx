@@ -60,6 +60,15 @@ const App = () => {
     const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
     const url = "https://api.deepseek.com/v1/chat/completions";
     
+    // 添加调试信息
+    if (!apiKey) {
+      console.error("API Key not found!");
+      console.log("Environment variables:", import.meta.env);
+      throw new Error('API Key is missing');
+    } else {
+      console.log("API Key loaded successfully:", apiKey.substring(0, 5) + '...');
+    }
+    
     let retries = 0;
     const maxRetries = 3;
     

@@ -76,6 +76,9 @@ COPY package*.json ./
 # 安装生产依赖（带重试机制）
 RUN npm install --only=production --legacy-peer-deps --maxsockets 1
 
+# 复制环境变量文件
+COPY .env ./
+
 # 使用CACHE_BUST参数确保每次构建都能获取最新的后端代码
 COPY server/ ./server/
 COPY --from=build /app/dist ./dist
