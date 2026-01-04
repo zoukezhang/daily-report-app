@@ -23,8 +23,17 @@ const App = () => {
   // 密码验证函数
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
+    
+    // 验证密码不为空
+    if (!password.trim()) {
+      setShowPasswordError(true);
+      return;
+    }
+    
     try {
-      const response = await axios.get(`${API_URL}?password=${password}`);
+      // 对密码进行URL编码，确保跨浏览器兼容性
+      const encodedPassword = encodeURIComponent(password);
+      const response = await axios.get(`${API_URL}?password=${encodedPassword}`);
       setHistory(response.data);
       setIsAuthenticated(true);
       setShowPasswordError(false);
@@ -37,7 +46,9 @@ const App = () => {
   const loadHistory = async () => {
     if (!isAuthenticated) return;
     try {
-      const response = await axios.get(`${API_URL}?password=${password}`);
+      // 对密码进行URL编码，确保跨浏览器兼容性
+      const encodedPassword = encodeURIComponent(password);
+      const response = await axios.get(`${API_URL}?password=${encodedPassword}`);
       setHistory(response.data);
     } catch (err) {
       console.error("加载数据库失败:", err);
@@ -173,7 +184,9 @@ const App = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("确定删除这条记录吗？")) return;
     try {
-      await axios.delete(`${API_URL}/${id}?password=${password}`);
+      // 对密码进行URL编码，确保跨浏览器兼容性
+      const encodedPassword = encodeURIComponent(password);
+      await axios.delete(`${API_URL}/${id}?password=${encodedPassword}`);
       loadHistory();
     } catch (error) {
       console.error("删除失败:", error);

@@ -11,7 +11,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = 3007;
 
-app.use(cors());
+// 配置CORS，允许来自前端的请求
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3007'], // 允许的源
+  credentials: true, // 允许携带凭证
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // 允许的方法
+  allowedHeaders: ['Content-Type', 'Authorization'] // 允许的头
+}));
+
+// 处理OPTIONS预检请求
+app.options('*', cors());
 app.use(bodyParser.json());
 
 app.use(express.static(path.join(__dirname, '../dist')));
@@ -53,7 +62,7 @@ app.post('/api/reports', async (req, res) => {
   }
 });
 
-app.delete('/api/reports/:id', async (req, res) => {
+app.delete('/api/reports/:id', passwordAuth, async (req, res) => {
   const { id } = req.params;
   try {
     const db = await getDB();
