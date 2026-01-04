@@ -28,3 +28,13 @@ dist-ssr
 
 # Environment variables
 .env
+
+# SSL certificates
+zj.aiwhy.club_nginx/
+
+# Archive files
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tgz
