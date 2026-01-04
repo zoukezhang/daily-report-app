@@ -17,11 +17,16 @@ const port = 3007;
 
 // 配置CORS，允许来自前端的请求
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3007'], // 允许的源
+  origin: process.env.CORS_ORIGIN || '*', // 允许的源，从环境变量获取或允许所有
   credentials: true, // 允许携带凭证
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // 允许的方法
   allowedHeaders: ['Content-Type', 'Authorization'] // 允许的头
 }));
+
+// 设置默认CORS源（如果环境变量未设置）
+if (!process.env.CORS_ORIGIN) {
+  console.log('CORS_ORIGIN environment variable not set, allowing all origins (*)');
+}
 
 // 处理OPTIONS预检请求
 app.options('*', cors());

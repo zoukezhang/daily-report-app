@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3007/api/reports';
+const API_URL = '/api/reports';
 
 const App = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
