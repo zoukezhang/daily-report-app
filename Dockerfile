@@ -40,6 +40,8 @@ ARG CACHE_BUST=1
 # 复制项目文件
 COPY . .
 
+# 环境变量文件已通过 COPY . . 复制
+
 # 构建前端应用
 RUN npm run build
 
