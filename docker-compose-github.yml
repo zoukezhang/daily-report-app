@@ -1,4 +1,4 @@
-# 日常报告应用的Docker Compose配置
+# 日常报告应用的Docker Compose配置 - 从GitHub拉取版本
 # 专为Baota面板优化
 
 services:
@@ -6,9 +6,9 @@ services:
   daily-report-app:
     # 容器名称（Baota中显示的名称）
     container_name: daily-report-app
-    # 使用当前目录的Dockerfile构建镜像
+    # 从GitHub仓库拉取代码并构建镜像（使用HTTPS URL，公开仓库无需身份验证）
     build:
-      context: .
+      context: https://github.com/zoukezhang/daily-report-app.git
       dockerfile: Dockerfile
       # 构建参数优化
       args:

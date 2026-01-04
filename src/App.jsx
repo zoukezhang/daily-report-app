@@ -57,7 +57,7 @@ const App = () => {
 
   // DeepSeek API 调用
   const callDeepSeek = async (prompt) => {
-    const apiKey = "sk-69c0f133ff0b4f10828c13d49350bc19"; 
+    const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
     const url = "https://api.deepseek.com/v1/chat/completions";
     
     let retries = 0;

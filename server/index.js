@@ -4,6 +4,10 @@ import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getDB } from './db.js';
+import dotenv from 'dotenv';
+
+// 加载环境变量
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +32,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // 密码认证中间件
 const passwordAuth = (req, res, next) => {
   const { password } = req.query;
-  const validPassword = '13141500';
+  const validPassword = process.env.HISTORY_PASSWORD;
   
   if (!password || password !== validPassword) {
     return res.status(401).json({ error: '密码错误或未提供' });
