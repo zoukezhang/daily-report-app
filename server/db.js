@@ -26,9 +26,17 @@ export async function getDB() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       date TEXT,
       content TEXT,
+      templateType TEXT DEFAULT 'qianjiang',
       createdAt INTEGER
     )
   `);
+
+  // 检查是否需要添加 templateType 列（针对旧数据）
+  try {
+    await dbInstance.exec(`ALTER TABLE reports ADD COLUMN templateType TEXT DEFAULT 'qianjiang'`);
+  } catch (e) {
+    // 如果列已存在，忽略错误
+  }
 
   return dbInstance;
 }

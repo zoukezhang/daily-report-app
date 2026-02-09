@@ -24,9 +24,12 @@ services:
     # 端口映射：主机端口:容器端口
     ports:
       - "3007:3007"
-    # 数据卷：持久化SQLite数据库文件（使用命名卷确保Baota可见）
+    # 数据卷：持久化SQLite数据库文件（使用宝塔中已存在的存储卷）
     volumes:
       - daily_report_data:/app/data
+    # 加载环境变量文件
+    env_file:
+      - .env
     # 环境变量设置
     environment:
       - NODE_ENV=production
@@ -50,8 +53,8 @@ services:
           cpus: '0.5'
           memory: 512M
 
-# 定义Docker命名卷（Baota中可见的存储卷）
+# 定义Docker命名卷
 volumes:
   daily_report_data:
-    # 设置为外部卷，这样删除容器时不会自动删除卷
+    # 设置为外部卷，表示该卷已在宝塔中创建存在，不要重新创建或删除
     external: true

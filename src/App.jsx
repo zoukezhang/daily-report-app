@@ -4,11 +4,10 @@ import axios from 'axios';
 const API_URL = '/api/reports';
 
 const App = () => {
+  const [templateType, setTemplateType] = useState('qianjiang');
+  const [name, setName] = useState('邹义科');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [personalGoal, setPersonalGoal] = useState('');
-  const [completedToDate, setCompletedToDate] = useState('');
-  const [todayGoal, setTodayGoal] = useState('');
-  const [todayActual, setTodayActual] = useState('');
+
   const [playVolume, setPlayVolume] = useState('');
   const [newCustomers, setNewCustomers] = useState('');
   const [rawWorkItems, setRawWorkItems] = useState('');
@@ -19,8 +18,8 @@ const App = () => {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showPasswordError, setShowPasswordError] = useState(false);
-
-  // 密码验证函数
+  
+  // 切换模板时自动更新默认姓名
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     
@@ -33,7 +32,7 @@ const App = () => {
     try {
       // 对密码进行URL编码，确保跨浏览器兼容性
       const encodedPassword = encodeURIComponent(password);
-      const response = await axios.get(`${API_URL}?password=${encodedPassword}`);
+      const response = await axios.get(`${API_URL}?password=${encodedPassword}&templateType=${templateType}`);
       setHistory(response.data);
       setIsAuthenticated(true);
       setShowPasswordError(false);
@@ -48,57 +47,27 @@ const App = () => {
     try {
       // 对密码进行URL编码，确保跨浏览器兼容性
       const encodedPassword = encodeURIComponent(password);
-      const response = await axios.get(`${API_URL}?password=${encodedPassword}`);
+      // 添加 templateType 参数，根据当前选择的模板筛选历史记录
+      const response = await axios.get(`${API_URL}?password=${encodedPassword}&templateType=${templateType}`);
       setHistory(response.data);
     } catch (err) {
       console.error("加载数据库失败:", err);
     }
   };
 
-  // DeepSeek API 调用
-  const callDeepSeek = async (prompt) => {
-    const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-    const url = "https://api.deepseek.com/v1/chat/completions";
-    
-    // 添加调试信息
-    if (!apiKey) {
-      console.error("API Key not found!");
-      console.log("Environment variables:", import.meta.env);
-      throw new Error('API Key is missing');
-    } else {
-      console.log("API Key loaded successfully:", apiKey.substring(0, 5) + '...');
-    }
-    
-    let retries = 0;
-    const maxRetries = 3;
-    
-    while (retries <= maxRetries) {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: "deepseek-chat",
-            messages: [
-              { role: "system", content: "你是一个专业的日报整理助手。请将用户提供的工作内容进行语义合并。返回格式必须是 JSON 对象，包含一个字符串数组字段 'items'。" },
-              { role: "user", content: prompt }
-            ],
-            response_format: { type: 'json_object' }
-          })
-        });
+  // 监听 templateType 变化，切换模板时重新加载对应的历史记录
+  useEffect(() => {
+    loadHistory();
+  }, [templateType, isAuthenticated]);
 
-        if (!response.ok) throw new Error('API request failed');
-        const data = await response.json();
-        return JSON.parse(data.choices[0].message.content);
-      } catch (error) {
-        if (retries === maxRetries) throw error;
-        const delay = Math.pow(2, retries) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
-        retries++;
-      }
+  // DeepSeek API 调用 (通过后端代理)
+  const callDeepSeek = async (prompt) => {
+    try {
+      const response = await axios.post('/api/generate', { prompt });
+      return response.data;
+    } catch (error) {
+      console.error("API 调用失败:", error);
+      throw error;
     }
   };
 
@@ -113,63 +82,113 @@ const App = () => {
       const [y, m, d] = selectedDate.split('-');
       const formattedDate = `${y}年${parseInt(m)}月${parseInt(d)}日`;
 
-      const todayPrompt = `请合并以下今日工作内容，意思相近的合并并统计数量，格式如“内容X条”：\n${rawWorkItems}`;
-      const tomorrowPrompt = `请合并以下明日计划内容，意思相近的合并并统计数量：\n${tomorrowPlan}`;
+      const todayPrompt = `请严格按照以下今日工作内容进行总结，保持内容的完整性，不要精简任何事项：
+1. 意思相近的项目请合并并统计数量
+2. 对于可计数的项目（如视频、直播等），请使用“内容X条”格式（如“剪辑唐老师视频3条”）
+3. 对于不可计数的项目（如招聘、面试等），请不要添加数量描述（如只写“招聘人员”，不要写“招聘人员1条”）
+4. 严格按照用户提供的原文内容进行总结，不要修改或精简任何信息
+\n${rawWorkItems}`;
+      const tomorrowPrompt = `请严格按照以下明日计划内容进行总结，保持内容的完整性，不要精简任何事项：
+1. 意思相近的项目请合并并统计数量
+2. 严格按照用户提供的原文内容进行总结，不要修改或精简任何信息
+\n${tomorrowPlan}`;
 
       const [todayResult, tomorrowResult] = await Promise.all([
         rawWorkItems ? callDeepSeek(todayPrompt) : { items: [] },
         tomorrowPlan ? callDeepSeek(tomorrowPrompt) : { items: [] }
       ]);
 
-      const todaySummary = todayResult.items || [];
+      // 处理今日工作内容，移除不必要的"1条"描述
+      const processItems = (items) => {
+        return (items || []).map(item => {
+          // 对于招聘、面试等不可计数的项目，移除"1条"
+          if (item.includes('招聘') || item.includes('面试') || item.includes('人员') || item.includes('招商')) {
+            return item.replace('1条', '').trim();
+          }
+          return item;
+        });
+      };
+
+      const todaySummary = processItems(todayResult.items);
       const tomorrowSummary = tomorrowResult.items || [];
 
-      let report = `[拳头][拳头][拳头][拳头][拳头][拳头]\n`;
-      report += `[爱心][爱心][爱心][爱心][爱心][爱心]\n`;
-      report += `时间：${formattedDate}（早宣晚检）\n`;
-      report += `公司：四川千江味业\n`;
-      report += `部门：运营部\n`;
-      report += `职位：运营总监\n`;
-      report += `姓名：邹义科\n`;
-      report += `㈠本月总目标：\n`;
-      report += `低标60W～中标70W～高标80W\n`;
-      report += `①我个人目标是：${personalGoal || '-'}\n`;
-      report += `②截止今日完成：${completedToDate || '-'}\n`;
-      report += `③今日目标：${todayGoal || '-'}\n`;
-      report += `④实际完成：${todayActual || '-'}\n`;
-      report += `㈡今日总结\n`;
-      report += `①昨日视频播放量（四大平台合计）：${playVolume || '-'}\n`;
-      report += `②今日新增客资：${newCustomers || '0'}个\n`;
-      
-      if (todaySummary.length > 0) {
-        todaySummary.forEach((item, index) => {
-          report += `${String.fromCharCode(9314 + index)}${item}\n`;
-        });
-      } else {
-        report += `③-\n`;
-      }
+      let report = '';
 
-      report += `㈢明日关键行动\n`;
-      if (tomorrowSummary.length === 0) {
-        report += `①-\n`;
-      } else {
-        tomorrowSummary.forEach((item, index) => {
-          report += `${String.fromCharCode(9312 + index)}${item}\n`;
-        });
-      }
+      if (templateType === 'qianjiang') {
+        report += `[拳头][拳头][拳头][拳头][拳头][拳头]\n`;
+        report += `[爱心][爱心][爱心][爱心][爱心][爱心]\n`;
+        report += `时间：${formattedDate}（早宣晚检）\n`;
+        report += `公司：四川千江味业\n`;
+        report += `部门：运营部\n`;
+        report += `职位：运营总监\n`;
+        report += `姓名：${name}\n`;
+        report += `㈠今日总结\n`;
+        report += `①昨日视频播放量（四大平台合计）：${playVolume || '-'}\n`;
+        report += `②今日新增客资：${newCustomers || '0'}个\n`;
+        
+        if (todaySummary.length > 0) {
+          todaySummary.forEach((item, index) => {
+            report += `${String.fromCharCode(9314 + index)}${item}\n`;
+          });
+        } else {
+          report += `③-\n`;
+        }
 
-      report += `感恩公司[合十][合十]感恩老大[合十][合十]感恩同事[合十][合十]感恩自己\n`;
-      report += `协同助我成 [拥抱] [拥抱]交付定江山\n`;
-      report += `🔆🔆🔆🔆🔆🔆🔆🔆🔆\n`;
-      report += `🚩🚩以身作则胜千言🚩🚩\n`;
-      report += `❤坚定信念我想我要我创造❤`;
+        report += `㈡明日关键行动\n`;
+        if (tomorrowSummary.length === 0) {
+          report += `①-\n`;
+        } else {
+          tomorrowSummary.forEach((item, index) => {
+            report += `${String.fromCharCode(9312 + index)}${item}\n`;
+          });
+        }
+
+        report += `感恩公司[合十][合十]感恩老大[合十][合十]感恩同事[合十][合十]感恩自己\n`;
+        report += `协同助我成 [拥抱] [拥抱]交付定江山\n`;
+        report += `🔆🔆🔆🔆🔆🔆🔆🔆🔆\n`;
+        report += `🚩🚩以身作则胜千言🚩🚩\n`;
+        report += `❤坚定信念我想我要我创造❤`;
+      } else if (templateType === 'tangmen') {
+        report += `✊✊✊✊✊\n`;
+        report += `❤️❤️❤️❤️❤️\n`;
+        report += `时间:${formattedDate}\n`;
+        report += `姓名:${name}\n`;
+        report += `今日总结：\n`;
+        
+        if (todaySummary.length > 0) {
+          todaySummary.forEach((item, index) => {
+            report += `${index + 1}. ${item}\n`;
+          });
+        } else {
+          report += `1. \n2. \n3. \n4. \n`;
+        }
+
+        report += `\n明天工作计划：\n`;
+        
+        if (tomorrowSummary.length > 0) {
+          tomorrowSummary.forEach((item, index) => {
+            report += `${index + 1}. ${item}\n`;
+          });
+        } else {
+          report += `1. \n2. \n3. \n4. \n`;
+        }
+
+        report += `\n\n最后，感谢团队托举，感恩平台成就！\n`;
+        report += ` 🔆🔆🔆🔆🔆🔆🔆🔆🔆\n`;
+        report += ` 🚩🚩以身作则胜千言🚩🚩\n`;
+        report += ` ❤️坚定信念我想我要我创造❤️\n`;
+        report += ` 💪💪💪💪💪💪💪💪💪💪\n`;
+        report += ` ✊🏻✊🏻✊🏻   上亿计划·势必达成✊🏻✊🏻✊🏻\n`;
+        report += ` 🌹🌹🌹🌹🌹🌹🌹🌹🌹🌹`;
+      }
 
       setOutput(report);
 
       // 保存到数据库
       await axios.post(API_URL, {
         date: selectedDate,
-        content: report
+        content: report,
+        templateType // 添加 templateType
       });
       loadHistory();
 
@@ -214,41 +233,60 @@ const App = () => {
                 🚀 智能日报
               </h1>
             </div>
-            <div className="text-[10px] opacity-60 bg-white/20 p-1 rounded uppercase tracking-wider">
-              SQLite Mode
+            <div className="flex flex-col items-end gap-1">
+              <div className="text-[10px] opacity-60 bg-white/20 p-1 rounded uppercase tracking-wider">
+                SQLite Mode
+              </div>
+              <div className="text-[8px] opacity-50 font-mono text-right leading-none">
+                {/* @ts-ignore */}
+                <span>v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}</span>
+                <span className="mx-1">|</span>
+                {/* @ts-ignore */}
+                <span>{typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'Dev Mode'}</span>
+              </div>
             </div>
           </div>
 
           <div className="p-6 space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               <div>
+                  <label className="block text-sm font-bold mb-1 text-gray-600">选择模板</label>
+                  <select 
+                    className="w-full p-2.5 border rounded-lg outline-none bg-white"
+                    value={templateType}
+                    onChange={(e) => setTemplateType(e.target.value)}
+                  >
+                    <option value="qianjiang">千江味总结</option>
+                    <option value="tangmen">唐门餐饮总结</option>
+                  </select>
+               </div>
+               <div>
                 <label className="block text-sm font-bold mb-1 text-gray-600">日期</label>
                 <input type="date" className="w-full p-2.5 border rounded-lg outline-none" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
               </div>
               <div>
-                <label className="block text-sm font-bold mb-1 text-gray-600">播放量</label>
-                <input type="text" className="w-full p-2.5 border rounded-lg outline-none" value={playVolume} onChange={(e) => setPlayVolume(e.target.value)} />
+                <label className="block text-sm font-bold mb-1 text-gray-600">姓名</label>
+                <input type="text" className="w-full p-2.5 border rounded-lg outline-none" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: '个人目标', val: personalGoal, set: setPersonalGoal },
-                { label: '截止今日完成', val: completedToDate, set: setCompletedToDate },
-                { label: '今日目标', val: todayGoal, set: setTodayGoal },
-                { label: '实际完成', val: todayActual, set: setTodayActual }
-              ].map((item, idx) => (
-                <div key={idx}>
-                  <label className="block text-xs font-bold text-gray-400 mb-1">{item.label}</label>
-                  <input type="text" className="w-full p-2 border rounded text-sm outline-none" value={item.val} onChange={(e)=>item.set(e.target.value)} />
+            {templateType === 'qianjiang' && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold mb-1 text-gray-600">播放量</label>
+                    <input type="text" className="w-full p-2.5 border rounded-lg outline-none" value={playVolume} onChange={(e) => setPlayVolume(e.target.value)} />
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <label className="block text-sm font-bold mb-1 text-blue-700">今日新增客资 (个)</label>
-              <input type="number" className="w-full p-2.5 border border-blue-200 rounded-lg outline-none" value={newCustomers} onChange={(e) => setNewCustomers(e.target.value)} />
-            </div>
+
+
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                  <label className="block text-sm font-bold mb-1 text-blue-700">今日新增客资 (个)</label>
+                  <input type="number" className="w-full p-2.5 border border-blue-200 rounded-lg outline-none" value={newCustomers} onChange={(e) => setNewCustomers(e.target.value)} />
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <textarea className="w-full p-2.5 border rounded-lg h-32 text-sm" placeholder="今日具体工作..." value={rawWorkItems} onChange={(e) => setRawWorkItems(e.target.value)} />

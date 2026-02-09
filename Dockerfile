@@ -84,8 +84,8 @@ RUN npm install --only=production --legacy-peer-deps --maxsockets 1
 # 使用CACHE_BUST参数确保每次构建都能获取最新的后端代码
 COPY server/ ./server/
 COPY --from=build /app/dist ./dist
-# 复制环境变量文件到运行阶段
-COPY .env ./
+# 复制环境变量文件到运行阶段（如果存在）
+COPY .env* ./
 
 
 # 创建数据目录并设置权限

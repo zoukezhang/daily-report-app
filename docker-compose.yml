@@ -1,34 +1,39 @@
 # 日常报告应用的Docker Compose配置
-# 专为Baota面板优化
+# 专为Baota面板构建优化
+
+version: '3.8'
 
 services:
   # 主应用服务
   daily-report-app:
     # 容器名称（Baota中显示的名称）
     container_name: daily-report-app
-    # 使用当前目录的Dockerfile构建镜像
+    # 使用当前目录的所有文件作为构建上下文
     build:
+      # 上下文路径：在宝塔面板中，这是上传docker-compose.yml文件的目录
+      # 确保Dockerfile和所有项目文件都在同一目录下
       context: .
+      # Dockerfile名称：与上下文目录中的Dockerfile文件名一致
       dockerfile: Dockerfile
       # 构建参数优化
       args:
         - npm_config_registry=https://registry.npmmirror.com
         - npm_config_fetch-retry-maxtimeout=600000
         # 使用当前时间戳作为CACHE_BUST，确保每次构建都能触发缓存失效
-        - CACHE_BUST=$(date +%Y%m%d%H%M%S)
+        - CACHE_BUST=${CACHE_BUST:-1}
     # 端口映射：主机端口:容器端口
     ports:
       - "3007:3007"
-    # 数据卷：持久化SQLite数据库文件（使用命名卷确保Baota可见）
+    # 数据卷：持久化SQLite数据库文件（使用宝塔中已存在的存储卷）
     volumes:
       - daily_report_data:/app/data
+    # 加载环境变量文件
+    env_file:
+      - .env
     # 环境变量设置
     environment:
       - NODE_ENV=production
       - npm_config_registry=https://registry.npmmirror.com
-    # 从.env文件加载环境变量
-    env_file:
-      - .env
     # 健康检查配置（Baota监控用）
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3007"]
@@ -48,8 +53,8 @@ services:
           cpus: '0.5'
           memory: 512M
 
-# 定义Docker命名卷（Baota中可见的存储卷）
+# 定义Docker命名卷
 volumes:
   daily_report_data:
-    # 设置为外部卷，这样删除容器时不会自动删除卷
+    # 设置为外部卷，表示该卷已在宝塔中创建存在，不要重新创建或删除
     external: true

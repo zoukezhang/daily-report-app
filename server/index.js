@@ -49,7 +49,16 @@ const passwordAuth = (req, res, next) => {
 app.get('/api/reports', passwordAuth, async (req, res) => {
   try {
     const db = await getDB();
-    const reports = await db.all('SELECT * FROM reports ORDER BY createdAt DESC');
+    const { templateType } = req.query;
+    let query = 'SELECT * FROM reports ORDER BY createdAt DESC';
+    let params = [];
+    
+    if (templateType) {
+      query = 'SELECT * FROM reports WHERE templateType = ? ORDER BY createdAt DESC';
+      params = [templateType];
+    }
+    
+    const reports = await db.all(query, params);
     res.json(reports);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -57,15 +66,15 @@ app.get('/api/reports', passwordAuth, async (req, res) => {
 });
 
 app.post('/api/reports', async (req, res) => {
-  const { date, content } = req.body;
+  const { date, content, templateType = 'qianjiang' } = req.body;
   const createdAt = Date.now();
   try {
     const db = await getDB();
     const result = await db.run(
-      'INSERT INTO reports (date, content, createdAt) VALUES (?, ?, ?)',
-      [date, content, createdAt]
+      'INSERT INTO reports (date, content, templateType, createdAt) VALUES (?, ?, ?, ?)',
+      [date, content, templateType, createdAt]
     );
-    res.json({ id: result.lastID, date, content, createdAt });
+    res.json({ id: result.lastID, date, content, templateType, createdAt });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -78,6 +87,45 @@ app.delete('/api/reports/:id', passwordAuth, async (req, res) => {
     await db.run('DELETE FROM reports WHERE id = ?', [id]);
     res.json({ message: 'Deleted successfully' });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DeepSeek API 代理路由
+app.post('/api/generate', async (req, res) => {
+  const { prompt } = req.body;
+  const apiKey = process.env.VITE_DEEPSEEK_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Server API Key configuration missing' });
+  }
+
+  try {
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: "你是一个专业的日报整理助手。请将用户提供的工作内容进行语义合并。返回格式必须是 JSON 对象，包含一个字符串数组字段 'items'。" },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`API request failed: ${response.status} ${errorData}`);
+    }
+
+    const data = await response.json();
+    res.json(JSON.parse(data.choices[0].message.content));
+  } catch (error) {
+    console.error('DeepSeek API Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
